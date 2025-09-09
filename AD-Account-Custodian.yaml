@@ -27,7 +27,7 @@ OrganizationalUnits:
     Description: "Staff Accounts"
     PasswordAgeThresholdDays: 365
     InactivityThresholdDays: 0
-    IncludeSubOUs: false
+    IncludeSubOUs: true
     ExcludeServiceAccounts: true
     AddDisableNote: true
     DisabledAccountsOU: "OU=Disabled,OU=Employees,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
@@ -46,7 +46,7 @@ OrganizationalUnits:
       - "admin"
   - DistinguishedName: "OU=Students,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
     Description: "Student Accounts"
-    PasswordAgeThresholdDays: 365
+    PasswordAgeThresholdDays: 0
     InactivityThresholdDays: 0
     IncludeSubOUs: false
     ExcludeServiceAccounts: true
