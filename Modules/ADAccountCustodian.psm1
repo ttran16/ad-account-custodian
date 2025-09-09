@@ -7,7 +7,11 @@
     - Module management and installation utilities
     - Logging functions with file and console output
     - Password reset enforcement for accounts with old passwords
-    - Account disa        # Calculate cutoff date
+    - Account disa            # Calculate cutoff date
+        $cutoffDate = (Get-Date).AddDays(-$OU.PasswordAgeThresholdDays)
+        
+        # Build LDAP filter (cannot use $null in LDAP, so we'll filter client-side)
+        $filter = "Enabled -eq `$true -and PasswordExpired -eq `$false -and whenCreated -lt `$cutoffDate" Calculate cutoff date
         $cutoffDate = (Get-Date).AddDays(-$OU.PasswordAgeThresholdDays)
         
         # Build LDAP filter (cannot use $null in LDAP, so we'll filter client-side)
@@ -393,9 +397,6 @@ function Invoke-PasswordReset {
         
         # Calculate cutoff date
         $cutoffDate = (Get-Date).AddDays(-$OU.PasswordAgeThresholdDays)
-        
-        # Build PowerShell filter with proper escaping
-        $filter = "Enabled -eq `$true -and PasswordExpired -eq `$false -and whenCreated -lt `$cutoffDate -and (PasswordLastSet -eq `$null -or PasswordLastSet -lt `$cutoffDate)"
         
         # Build search parameters
         $searchParams = @{
