@@ -7,7 +7,11 @@
     - Module management and installation utilities
     - Logging functions with file and console output
     - Password reset enforcement for accounts with old passwords
-    - Account disabling based on inactivity thresholds
+    - Account disa        # Calculate cutoff date
+        $cutoffDate = (Get-Date).AddDays(-$OU.PasswordAgeThresholdDays)
+        
+        # Build LDAP filter (cannot use $null in LDAP, so we'll filter client-side)
+        $filter = "Enabled -eq `$true -and PasswordExpired -eq `$false -and whenCreated -lt `$cutoffDate" based on inactivity thresholds
     - Common utility functions for AD account management
 
 .NOTES
@@ -407,10 +411,17 @@ function Invoke-PasswordReset {
             $searchParams.SearchScope = "OneLevel"
         }
         
-        # Get user count first for reporting
+        # Get user count first for reporting (with PasswordLastSet filtering)
         $countParams = $searchParams.Clone()
         $countParams.Remove('Properties')
-        $totalUserCount = (Get-ADUser @countParams).Count
+        $allCandidateUsers = Get-ADUser @countParams
+        
+        # Filter for users with old passwords (client-side since LDAP can't handle $null comparisons)
+        $usersNeedingReset = $allCandidateUsers | Where-Object {
+            (-not $_.PasswordLastSet) -or ($_.PasswordLastSet -lt $cutoffDate)
+        }
+        
+        $totalUserCount = $usersNeedingReset.Count
         Write-Log "Found $totalUserCount users requiring password reset evaluation" -LogPath $Config.LogFile
         
         # Apply user limit if configured
@@ -420,14 +431,17 @@ function Invoke-PasswordReset {
             $null
         }
         
-        # Get users with limit applied at query level for efficiency
+        # Get users with limit applied
         if ($maxUsers -and $totalUserCount -gt $maxUsers) {
-            $users = Get-ADUser @searchParams | Select-Object -First $maxUsers
+            $usersToProcess = $usersNeedingReset | Select-Object -First $maxUsers
+            # Get full user objects with properties for the limited set
+            $users = $usersToProcess | ForEach-Object { Get-ADUser -Identity $_.SamAccountName -Properties $searchParams.Properties }
             Write-Log "Processing first $maxUsers of $totalUserCount users (MaxUsersPerRun: $($Config.MaxUsersPerRun))" -LogPath $Config.LogFile
             Write-Log "Remaining users for future runs: $($totalUserCount - $maxUsers)" -LogPath $Config.LogFile
         } else {
-            $users = Get-ADUser @searchParams
-            Write-Log "Processing all $($users.Count) users" -LogPath $Config.LogFile
+            # Get full user objects with properties for all users
+            $users = $usersNeedingReset | ForEach-Object { Get-ADUser -Identity $_.SamAccountName -Properties $searchParams.Properties }
+            Write-Log "Processing all $totalUserCount users" -LogPath $Config.LogFile
         }
         
         foreach ($user in $users) {
