@@ -31,7 +31,13 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # Import the AD Account Custodian module (contains all necessary functions)
 try {
-    Import-Module "$scriptPath\Modules\ADAccountCustodian.psm1" -Force
+    $modulePath = "$scriptPath\Modules\ADAccountCustodian.psm1"
+    if (-not (Test-Path $modulePath)) {
+        throw "Module not found at: $modulePath"
+    }
+    
+    Import-Module $modulePath -Force
+    Write-Host "Successfully imported ADAccountCustodian module" -ForegroundColor Green
     
     # Import required external modules
     Import-RequiredModules -Modules @('ActiveDirectory', 'powershell-yaml')

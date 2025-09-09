@@ -1,0 +1,50 @@
+# AD Account Custodian - Git Ignore File
+
+# Logs directory and log files
+Logs/
+*.log
+
+# PowerShell module cache
+*.psm1.cache
+
+# Temporary files
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+
+# Windows system files
+Thumbs.db
+Desktop.ini
+
+# Visual Studio Code settings (optional - remove if you want to share VS Code settings)
+.vscode/
+
+# PowerShell execution policy bypass files
+*.ps1.lnk
+
+# Configuration overrides (keep template, ignore local customizations)
+*-local.yaml
+*-dev.yaml
+*-test.yaml
+
+# Output files that might be generated
+output/
+reports/
+exports/
+
+# Credentials or sensitive data files
+credentials.txt
+secrets.yaml
+passwords.txt
+*.pem
+*.key
+
+# PowerShell transcript files
+PowerShell_transcript.*.txt
+
+# Any compiled or generated files
+bin/
+obj/

@@ -7,15 +7,7 @@
     - Module management and installation utilities
     - Logging functions with file and console output
     - Password reset enforcement for accounts with old passwords
-    - Account disa            # Calculate cutoff date
-        $cutoffDate = (Get-Date).AddDays(-$OU.PasswordAgeThresholdDays)
-        
-        # Build LDAP filter (cannot use $null in LDAP, so we'll filter client-side)
-        $filter = "Enabled -eq `$true -and PasswordExpired -eq `$false -and whenCreated -lt `$cutoffDate" Calculate cutoff date
-        $cutoffDate = (Get-Date).AddDays(-$OU.PasswordAgeThresholdDays)
-        
-        # Build LDAP filter (cannot use $null in LDAP, so we'll filter client-side)
-        $filter = "Enabled -eq `$true -and PasswordExpired -eq `$false -and whenCreated -lt `$cutoffDate" based on inactivity thresholds
+    - Account disabling based on inactivity thresholds
     - Common utility functions for AD account management
 
 .NOTES
@@ -268,7 +260,6 @@ function Write-LogSeparator {
 
 #region Utility Functions
 
-# Function to check if user should be excluded
 function Test-ExcludedUser {
     <#
     .SYNOPSIS
@@ -309,14 +300,16 @@ function Test-ExcludedUser {
     return $false
 }
 
-# Function to check if account is a service account
 function Test-ServiceAccount {
     <#
     .SYNOPSIS
         Checks if an account appears to be a service account
     
-    .PARAMETER User
-        AD User object to evaluate
+    .PARAMETER Username
+        Username to check
+    
+    .PARAMETER Config
+        Configuration object containing service account patterns
     
     .RETURNS
         Boolean indicating if account appears to be a service account
@@ -324,8 +317,11 @@ function Test-ServiceAccount {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateNotNull()]
-        [Microsoft.ActiveDirectory.Management.ADUser]$User
+        [ValidateNotNullOrEmpty()]
+        [string]$Username,
+        
+        [Parameter(Mandatory = $false)]
+        [PSObject]$Config
     )
     
     try {
@@ -340,11 +336,10 @@ function Test-ServiceAccount {
         )
         
         # Get clean values for comparison
-        $samAccountName = if ($User.SamAccountName) { $User.SamAccountName.ToLower() } else { "" }
-        $displayName = if ($User.Name) { $User.Name.ToLower() } else { "" }
+        $samAccountName = $Username.ToLower()
         
         foreach ($pattern in $servicePatterns) {
-            if ($samAccountName -like $pattern -or $displayName -like $pattern) {
+            if ($samAccountName -like $pattern) {
                 return $true
             }
         }
@@ -357,7 +352,6 @@ function Test-ServiceAccount {
     }
 }
 
-# Function to process password reset for old passwords
 function Invoke-PasswordReset {
     <#
     .SYNOPSIS
@@ -398,11 +392,11 @@ function Invoke-PasswordReset {
         # Calculate cutoff date
         $cutoffDate = (Get-Date).AddDays(-$OU.PasswordAgeThresholdDays)
         
-        # Build search parameters
+        # Build search parameters - use simple filter and handle complex logic client-side
         $searchParams = @{
             SearchBase = $OU.DistinguishedName
-            Filter = $filter
-            Properties = @('SamAccountName', 'PasswordLastSet', 'PasswordNeverExpires', 'whenCreated', 'PasswordExpired')
+            Filter = "*"
+            Properties = @('SamAccountName', 'PasswordLastSet', 'PasswordNeverExpires', 'whenCreated', 'PasswordExpired', 'DisplayName')
             ErrorAction = 'Stop'
         }
         
@@ -412,14 +406,14 @@ function Invoke-PasswordReset {
             $searchParams.SearchScope = "OneLevel"
         }
         
-        # Get user count first for reporting (with PasswordLastSet filtering)
-        $countParams = $searchParams.Clone()
-        $countParams.Remove('Properties')
-        $allCandidateUsers = Get-ADUser @countParams
+        # Get all users from the OU and apply client-side filtering (based on your working command)
+        $allUsers = Get-ADUser @searchParams
         
-        # Filter for users with old passwords (client-side since LDAP can't handle $null comparisons)
-        $usersNeedingReset = $allCandidateUsers | Where-Object {
-            (-not $_.PasswordLastSet) -or ($_.PasswordLastSet -lt $cutoffDate)
+        # Filter for users needing password reset (based on your working PowerShell command)
+        $usersNeedingReset = $allUsers | Where-Object { 
+            $_.whenCreated -lt $cutoffDate -and 
+            ($_.PasswordLastSet -eq $null -or $_.PasswordLastSet -lt $cutoffDate) -and 
+            $_.PasswordExpired -eq $false 
         }
         
         $totalUserCount = $usersNeedingReset.Count
@@ -434,14 +428,11 @@ function Invoke-PasswordReset {
         
         # Get users with limit applied
         if ($maxUsers -and $totalUserCount -gt $maxUsers) {
-            $usersToProcess = $usersNeedingReset | Select-Object -First $maxUsers
-            # Get full user objects with properties for the limited set
-            $users = $usersToProcess | ForEach-Object { Get-ADUser -Identity $_.SamAccountName -Properties $searchParams.Properties }
+            $users = $usersNeedingReset | Select-Object -First $maxUsers
             Write-Log "Processing first $maxUsers of $totalUserCount users (MaxUsersPerRun: $($Config.MaxUsersPerRun))" -LogPath $Config.LogFile
             Write-Log "Remaining users for future runs: $($totalUserCount - $maxUsers)" -LogPath $Config.LogFile
         } else {
-            # Get full user objects with properties for all users
-            $users = $usersNeedingReset | ForEach-Object { Get-ADUser -Identity $_.SamAccountName -Properties $searchParams.Properties }
+            $users = $usersNeedingReset
             Write-Log "Processing all $totalUserCount users" -LogPath $Config.LogFile
         }
         
@@ -474,7 +465,7 @@ function Invoke-PasswordReset {
                 $modifiedCount++
             } else {
                 try {
-                    #Set-ADUser -Identity $user.SamAccountName -ChangePasswordAtLogon $true -ErrorAction Stop
+                    Set-ADUser -Identity $user.SamAccountName -ChangePasswordAtLogon $true -ErrorAction Stop
                     Write-Log "Set password reset for: $($user.SamAccountName) (Password age: $passwordAge days)" -LogPath $Config.LogFile
                     $modifiedCount++
                 }
@@ -493,7 +484,6 @@ function Invoke-PasswordReset {
     }
 }
 
-# Function to process inactivity-based account disabling
 function Invoke-InactivityDisable {
     <#
     .SYNOPSIS
@@ -549,9 +539,6 @@ function Invoke-InactivityDisable {
         }
         
         # Get all enabled users
-        $users = Get-ADUser @searchParams
-        
-        # Get inactive users count first for reporting
         $users = Get-ADUser @searchParams
         
         # Filter for inactive users
@@ -620,7 +607,7 @@ function Invoke-InactivityDisable {
             } else {
                 try {
                     # Disable the account
-                    #Disable-ADAccount -Identity $user.SamAccountName -ErrorAction Stop
+                    Disable-ADAccount -Identity $user.SamAccountName -ErrorAction Stop
                     
                     # Add disable note if configured
                     if ($OU.AddDisableNote) {
@@ -673,10 +660,6 @@ function Invoke-InactivityDisable {
         return 0
     }
 }
-
-#endregion
-
-#region AD Management Functions (Main Functions)
 
 #endregion
 
