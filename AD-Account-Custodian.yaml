@@ -1,0 +1,63 @@
+# Configuration for Set-PasswordResetOnLogin.ps1 script
+Description: "Password reset and account management configuration for AD accounts"
+
+OrganizationalUnits:
+  - DistinguishedName: "OU=Faculty,OU=Employees,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    Description: "Faculty Accounts"
+    PasswordAgeThresholdDays: 365
+    InactivityThresholdDays: 0
+    IncludeSubOUs: false
+    ExcludeServiceAccounts: true
+    AddDisableNote: true
+    DisabledAccountsOU: "OU=Disabled,OU=Employees,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    ExcludedUsers:
+      - "admin"
+      - "emergency.admin"
+  - DistinguishedName: "OU=Interns,OU=Employees,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    Description: "Intern Accounts"
+    PasswordAgeThresholdDays: 365
+    InactivityThresholdDays: 0
+    IncludeSubOUs: false
+    ExcludeServiceAccounts: true
+    AddDisableNote: true
+    DisabledAccountsOU: "OU=Disabled,OU=Employees,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    ExcludedUsers:
+      - "admin"
+  - DistinguishedName: "OU=Staff,OU=Employees,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    Description: "Staff Accounts"
+    PasswordAgeThresholdDays: 365
+    InactivityThresholdDays: 0
+    IncludeSubOUs: false
+    ExcludeServiceAccounts: true
+    AddDisableNote: true
+    DisabledAccountsOU: "OU=Disabled,OU=Employees,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    ExcludedUsers:
+      - "admin"
+      - "emergency.admin"
+  - DistinguishedName: "OU=Student Staff,OU=Employees,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    Description: "Student Staff Accounts"
+    PasswordAgeThresholdDays: 365
+    InactivityThresholdDays: 0
+    IncludeSubOUs: false
+    ExcludeServiceAccounts: true
+    AddDisableNote: true
+    DisabledAccountsOU: "OU=Disabled,OU=Employees,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    ExcludedUsers:
+      - "admin"
+  - DistinguishedName: "OU=Students,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    Description: "Student Accounts"
+    PasswordAgeThresholdDays: 365
+    InactivityThresholdDays: 0
+    IncludeSubOUs: false
+    ExcludeServiceAccounts: true
+    AddDisableNote: true
+    DisabledAccountsOU: "OU=Disabled,OU=Accounts,DC=COAST,DC=CCCD,DC=ADX"
+    ExcludedUsers:
+      - "admin"
+
+# Processing options
+EnablePasswordReset: true
+EnableInactivityDisabling: true
+
+LogFile: ".\\Logs\\AD-Custodian.log"
+TestMode: true
