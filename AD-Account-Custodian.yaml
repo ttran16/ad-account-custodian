@@ -57,7 +57,8 @@ OrganizationalUnits:
 
 # Processing options
 EnablePasswordReset: true
-EnableInactivityDisabling: true
+EnableInactivityDisabling: false
+MaxUsersPerRun: 100
 
 LogFile: ".\\Logs\\AD-Custodian.log"
 TestMode: true

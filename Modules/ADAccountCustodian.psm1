@@ -407,9 +407,28 @@ function Invoke-PasswordReset {
             $searchParams.SearchScope = "OneLevel"
         }
         
-        # Get users
-        $users = Get-ADUser @searchParams
-        Write-Log "Found $($users.Count) users requiring password reset evaluation" -LogPath $Config.LogFile
+        # Get user count first for reporting
+        $countParams = $searchParams.Clone()
+        $countParams.Remove('Properties')
+        $totalUserCount = (Get-ADUser @countParams).Count
+        Write-Log "Found $totalUserCount users requiring password reset evaluation" -LogPath $Config.LogFile
+        
+        # Apply user limit if configured
+        $maxUsers = if ($Config.MaxUsersPerRun -and $Config.MaxUsersPerRun -gt 0) { 
+            $Config.MaxUsersPerRun 
+        } else { 
+            $null
+        }
+        
+        # Get users with limit applied at query level for efficiency
+        if ($maxUsers -and $totalUserCount -gt $maxUsers) {
+            $users = Get-ADUser @searchParams | Select-Object -First $maxUsers
+            Write-Log "Processing first $maxUsers of $totalUserCount users (MaxUsersPerRun: $($Config.MaxUsersPerRun))" -LogPath $Config.LogFile
+            Write-Log "Remaining users for future runs: $($totalUserCount - $maxUsers)" -LogPath $Config.LogFile
+        } else {
+            $users = Get-ADUser @searchParams
+            Write-Log "Processing all $($users.Count) users" -LogPath $Config.LogFile
+        }
         
         foreach ($user in $users) {
             # Skip if user object is invalid
@@ -517,6 +536,9 @@ function Invoke-InactivityDisable {
         # Get all enabled users
         $users = Get-ADUser @searchParams
         
+        # Get inactive users count first for reporting
+        $users = Get-ADUser @searchParams
+        
         # Filter for inactive users
         $inactiveUsers = $users | Where-Object {
             # Account must be older than inactivity threshold (to avoid disabling new accounts)
@@ -528,7 +550,23 @@ function Invoke-InactivityDisable {
             $accountAge -and $lastLogonOld
         }
         
-        Write-Log "Found $($inactiveUsers.Count) inactive users for potential disabling" -LogPath $Config.LogFile
+        $totalInactiveCount = $inactiveUsers.Count
+        Write-Log "Found $totalInactiveCount inactive users for potential disabling" -LogPath $Config.LogFile
+        
+        # Apply user limit if configured
+        $maxUsers = if ($Config.MaxUsersPerRun -and $Config.MaxUsersPerRun -gt 0) { 
+            $Config.MaxUsersPerRun 
+        } else { 
+            $null
+        }
+        
+        if ($maxUsers -and $totalInactiveCount -gt $maxUsers) {
+            $inactiveUsers = $inactiveUsers | Select-Object -First $maxUsers
+            Write-Log "Processing first $maxUsers of $totalInactiveCount inactive users (MaxUsersPerRun: $($Config.MaxUsersPerRun))" -LogPath $Config.LogFile
+            Write-Log "Remaining inactive users for future runs: $($totalInactiveCount - $maxUsers)" -LogPath $Config.LogFile
+        } else {
+            Write-Log "Processing all $totalInactiveCount inactive users" -LogPath $Config.LogFile
+        }
         
         foreach ($user in $inactiveUsers) {
             # Skip if user object is invalid
